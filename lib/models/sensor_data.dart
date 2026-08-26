@@ -13,6 +13,22 @@ class SensorData {
   final double accelerationZ;
   final double inclination;
 
+  Map<String, dynamic> toJson() => {
+        'timestamp': timestamp.toIso8601String(),
+        'x': accelerationX,
+        'y': accelerationY,
+        'z': accelerationZ,
+        'inclination': inclination,
+      };
+
+  factory SensorData.fromJson(Map<String, dynamic> json) => SensorData(
+        timestamp: DateTime.parse(json['timestamp'] as String),
+        accelerationX: (json['x'] as num).toDouble(),
+        accelerationY: (json['y'] as num).toDouble(),
+        accelerationZ: (json['z'] as num).toDouble(),
+        inclination: (json['inclination'] as num).toDouble(),
+      );
+
   double get magnitude => (accelerationX * accelerationX +
           accelerationY * accelerationY +
           accelerationZ * accelerationZ)

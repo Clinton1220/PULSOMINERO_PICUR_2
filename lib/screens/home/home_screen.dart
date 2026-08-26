@@ -22,6 +22,18 @@ class _HomeScreenState extends State<HomeScreen> {
   final storage = StorageService();
 
   @override
+  void initState() {
+    super.initState();
+    storage.load();
+  }
+
+  @override
+  void dispose() {
+    storage.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final pages = [
       DashboardContent(session: widget.session),
