@@ -80,8 +80,9 @@ class VibrationRules {
       final previous = samples[index - 1].magnitude;
       final current = samples[index].magnitude;
       final next = samples[index + 1].magnitude;
-      if (current > previous && current >= next && current >= safeThreshold)
+      if (current > previous && current >= next && current >= safeThreshold) {
         peaks++;
+      }
     }
     return peaks;
   }

@@ -9,6 +9,7 @@ abstract class SensorService {
   Future<void> connect();
   Future<void> disconnect();
   void setDemoMode(DemoMode mode);
+  Future<void> dispose();
 }
 
 enum DemoMode { isolated, sustained }
@@ -58,6 +59,7 @@ class SensorSimulator implements SensorService {
   @override
   void setDemoMode(DemoMode mode) => _mode = mode;
 
+  @override
   Future<void> dispose() async {
     await disconnect();
     await _controller.close();

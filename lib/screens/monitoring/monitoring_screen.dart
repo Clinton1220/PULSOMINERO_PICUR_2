@@ -158,12 +158,14 @@ class _ChartPainter extends CustomPainter {
     final grid = Paint()
       ..color = const Color(0xFF263033)
       ..strokeWidth = 1;
-    for (var i = 1; i < 5; i++)
+    for (var i = 1; i < 5; i++) {
       canvas.drawLine(Offset(0, size.height * i / 5),
           Offset(size.width, size.height * i / 5), grid);
-    for (var i = 1; i < 7; i++)
+    }
+    for (var i = 1; i < 7; i++) {
       canvas.drawLine(Offset(size.width * i / 7, 0),
           Offset(size.width * i / 7, size.height), grid);
+    }
     final points = [
       0.61,
       .58,

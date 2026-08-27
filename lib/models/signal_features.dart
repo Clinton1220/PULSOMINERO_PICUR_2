@@ -68,7 +68,9 @@ class SignalFeatures {
     for (var index = 1; index < values.length - 1; index++) {
       if (values[index] > values[index - 1] &&
           values[index] >= values[index + 1] &&
-          values[index] >= threshold) peaks++;
+          values[index] >= threshold) {
+        peaks++;
+      }
     }
     return peaks;
   }

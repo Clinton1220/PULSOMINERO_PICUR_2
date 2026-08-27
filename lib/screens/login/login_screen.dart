@@ -56,13 +56,16 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = value ?? '';
     if (password.isEmpty) return 'Ingresa una contraseña';
     if (password.length < 8) return 'Debe tener mínimo 8 caracteres';
-    if (!RegExp(r'[A-Z]').hasMatch(password))
+    if (!RegExp(r'[A-Z]').hasMatch(password)) {
       return 'Incluye una letra mayúscula';
-    if (!RegExp(r'[a-z]').hasMatch(password))
+    }
+    if (!RegExp(r'[a-z]').hasMatch(password)) {
       return 'Incluye una letra minúscula';
+    }
     if (!RegExp(r'[0-9]').hasMatch(password)) return 'Incluye un número';
-    if (!RegExp(r'[^A-Za-z0-9]').hasMatch(password))
+    if (!RegExp(r'[^A-Za-z0-9]').hasMatch(password)) {
       return 'Incluye un símbolo';
+    }
     return null;
   }
 
@@ -97,9 +100,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       openDashboard(context, session);
     } on StateError catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
+      }
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -217,11 +221,15 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       },
     );
-    if (email == null || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email))
+    if (email == null ||
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
       return;
+    }
     emailController.text = email;
     if (!await requestVerification(VerificationPurpose.passwordRecovery) ||
-        !mounted) return;
+        !mounted) {
+      return;
+    }
     final newPassword = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
@@ -250,14 +258,16 @@ class _LoginScreenState extends State<LoginScreen> {
     if (newPassword == null) return;
     final error = validatePassword(newPassword);
     if (error != null) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error)));
+      }
       return;
     }
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Contraseña actualizada correctamente')));
+    }
   }
 
   void toggleMode() {
@@ -411,13 +421,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold))),
                     const SizedBox(height: 19),
-                    Row(children: [
-                      const Expanded(child: Divider(color: AppTheme.border)),
-                      const Padding(
+                    const Row(children: [
+                      Expanded(child: Divider(color: AppTheme.border)),
+                      Padding(
                           padding: EdgeInsets.symmetric(horizontal: 12),
                           child: Text('o continúa con',
                               style: TextStyle(color: Colors.grey))),
-                      const Expanded(child: Divider(color: AppTheme.border))
+                      Expanded(child: Divider(color: AppTheme.border))
                     ]),
                     const SizedBox(height: 15),
                     OutlinedButton.icon(

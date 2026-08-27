@@ -47,15 +47,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   void exportHistory() {
     final rows = <String>[
-      'id,fecha,clasificacion,riesgo,amplitud_maxima,repeticiones'
+      'id,fecha,clasificacion,riesgo,amplitud_maxima_ms2,inclinacion_grados,gas_max_ppm,repeticiones'
     ];
     for (final record in widget.storage.records) {
+      final maxInc = record.samples.isEmpty
+          ? 0.0
+          : record.samples
+              .map((s) => s.inclination.abs())
+              .reduce((a, b) => a > b ? a : b);
+      final maxGas = record.samples.isEmpty
+          ? 0.0
+          : record.samples.map((s) => s.gasPpm).reduce((a, b) => a > b ? a : b);
+
       rows.add(
-          '${record.id},${record.startedAt.toIso8601String()},${record.analysis.title},${record.analysis.riskLevel},${record.analysis.maximumAmplitude.toStringAsFixed(2)},${record.analysis.repetitions}');
+          '${record.id},${record.startedAt.toIso8601String()},${record.analysis.title},${record.analysis.riskLevel},${record.analysis.maximumAmplitude.toStringAsFixed(2)},${maxInc.toStringAsFixed(1)},${maxGas.toStringAsFixed(0)},${record.analysis.repetitions}');
     }
     Clipboard.setData(ClipboardData(text: rows.join('\n')));
     ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Resumen CSV copiado al portapapeles')));
+        const SnackBar(content: Text('Reporte técnico CSV copiado al portapapeles')));
   }
 
   @override
@@ -134,7 +143,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     _DetailLine(
                         label: 'Amplitud máxima',
                         value:
-                            '${record.analysis.maximumAmplitude.toStringAsFixed(2)} mm/s'),
+                            '${record.analysis.maximumAmplitude.toStringAsFixed(2)} m/s²'),
+                    _DetailLine(
+                        label: 'Inclinación máx',
+                        value:
+                            '${record.samples.isEmpty ? '0.0' : record.samples.map((s) => s.inclination.abs()).reduce((a, b) => a > b ? a : b).toStringAsFixed(1)}°'),
+                    _DetailLine(
+                        label: 'Gas máx (MQ-135)',
+                        value:
+                            '${record.samples.isEmpty ? '0' : record.samples.map((s) => s.gasPpm).reduce((a, b) => a > b ? a : b).toStringAsFixed(0)} PPM'),
                     _DetailLine(
                         label: 'Duración',
                         value: '${record.analysis.duration.inMilliseconds} ms'),
@@ -144,7 +161,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       _DetailLine(
                           label: 'RMS / frecuencia',
                           value:
-                              '${features.rms.toStringAsFixed(2)} mm/s · ${features.dominantFrequency.toStringAsFixed(2)} Hz'),
+                              '${features.rms.toStringAsFixed(2)} m/s² · ${features.dominantFrequency.toStringAsFixed(2)} Hz'),
                     const SizedBox(height: 10),
                     const Text('Explicación',
                         style: TextStyle(

@@ -21,4 +21,7 @@ class BluetoothSensorService implements SensorService {
 
   @override
   void setDemoMode(DemoMode mode) => _transport.setDemoMode(mode);
+
+  @override
+  Future<void> dispose() => _transport.dispose();
 }
