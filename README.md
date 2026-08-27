@@ -146,6 +146,7 @@ flutter run
 
 ---
 
-## 👥 Autores
+## 👥 Equipo de Desarrollo / Autores
+- **Juan Pablo Jorge Calderón**
 - **Proyecto Pulso Minero - PICUR 2**
-- Grupo 6: Zona de explotación minera.
+- **Grupo 6:** Zona de explotación minera (Vibración por maquinaria pesada - Ferney Pérez).
