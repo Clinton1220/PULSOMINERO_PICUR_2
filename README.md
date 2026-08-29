@@ -1,4 +1,4 @@
-# ⛏️ Pulso Minero - Monitoreo IoT & IA Explicable para Minería
+#  Pulso Minero - Monitoreo IoT & IA Explicable para Minería
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.41.4-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.7.0-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
@@ -10,7 +10,7 @@
 
 ---
 
-## 📌 Contexto y Escenario Operativo
+##  Contexto y Escenario Operativo
 
 - **Grupo:** 6
 - **Sitio Asignado:** Zona de explotación minera — Monitoreo de vibración por maquinaria pesada (*Ferney Pérez*).
@@ -19,19 +19,19 @@
 
 ---
 
-## 🚀 Características Principales
+##  Características Principales
 
-### 📱 Aplicación Móvil (Flutter)
-- 📊 **Osciloscopio Sísmico Multicanal:** Visualización fluida de la curva de aceleración en tiempo real con gradiente adaptativo de riesgo.
-- 🧭 **Desglose Tridimensional ($X, Y, Z$):** Telemetría continua de los 3 ejes de aceleración y cálculo de magnitud resultante.
-- 📐 **Inclinómetro de Estabilidad:** Medición precisa de los ángulos de inclinación (*Pitch*) y balanceo (*Roll*) para prevenir desprendimientos o colapsos de roca.
-- 🫁 **Monitoreo de Gases Mineros (MQ-135):** Lectura en tiempo real de concentración en **PPM**, voltaje analógico y semáforo de riesgo ambiental (*Normal*, *Precaución*, *Peligro*).
-- ⚖️ **Calibración de Cero (Tara Dinámica):** Botón para descontar la gravedad de reposo ($9.81\text{ m/s}^2$) y registrar únicamente la vibración neta.
-- 💻 **Inspector de Telemetría JSON:** Consola integrada para auditar byte a byte la trama cruda transmitida por el ESP32 en vivo.
-- 🤖 **Diagnóstico Explicable con IA:** Clasificación automática del ensayo con nivel de confianza (%) y justificación en lenguaje natural (*"Por qué"* el sistema tomó la decisión).
-- 📁 **Historial y Exportación a CSV:** Registro local persistente de todos los ensayos con generador de reportes técnicos tabulados.
+###  Aplicación Móvil (Flutter)
+-  **Osciloscopio Sísmico Multicanal:** Visualización fluida de la curva de aceleración en tiempo real con gradiente adaptativo de riesgo.
+-  **Desglose Tridimensional ($X, Y, Z$):** Telemetría continua de los 3 ejes de aceleración y cálculo de magnitud resultante.
+-  **Inclinómetro de Estabilidad:** Medición precisa de los ángulos de inclinación (*Pitch*) y balanceo (*Roll*) para prevenir desprendimientos o colapsos de roca.
+-  **Monitoreo de Gases Mineros (MQ-135):** Lectura en tiempo real de concentración en **PPM**, voltaje analógico y semáforo de riesgo ambiental (*Normal*, *Precaución*, *Peligro*).
+-  **Calibración de Cero (Tara Dinámica):** Botón para descontar la gravedad de reposo ($9.81\text{ m/s}^2$) y registrar únicamente la vibración neta.
+-  **Inspector de Telemetría JSON:** Consola integrada para auditar byte a byte la trama cruda transmitida por el ESP32 en vivo.
+-  **Diagnóstico Explicable con IA:** Clasificación automática del ensayo con nivel de confianza (%) y justificación en lenguaje natural (*"Por qué"* el sistema tomó la decisión).
+-  **Historial y Exportación a CSV:** Registro local persistente de todos los ensayos con generador de reportes técnicos tabulados.
 
-### 📡 Firmware IoT (ESP32)
+###  Firmware IoT (ESP32)
 - **Conectividad Dual:** Servidor TCP/Socket sobre Wi-Fi (Modo Punto de Acceso `PulsoMinero-WiFi` en puerto `81`) y soporte para Bluetooth Low Energy (BLE).
 - **Muestreo a 10 Hz:** Transmisión regular de tramas JSON ultraligeras cada 100 ms.
 - **Filtro Digital y Alta Sensibilidad:** Rango $\pm 2g$ con filtro pasa-bajos digital (DLPF a $44\text{ Hz}$) para capturar micro-oscilaciones sin ruido eléctrico.
@@ -39,7 +39,7 @@
 
 ---
 
-## 🛠️ Arquitectura de Hardware y Conexiones
+##  Arquitectura de Hardware y Conexiones
 
 ```
                        ┌────────────────────────────────┐
@@ -68,7 +68,7 @@
 
 ---
 
-## 🧠 Lógica del Motor de IA Explicable (XAI)
+##  Lógica del Motor de IA Explicable (XAI)
 
 El módulo `AiService` extrae características de la señal en ventanas de tiempo y aplica reglas de inferencia explicables:
 
@@ -92,7 +92,7 @@ graph TD
 
 ---
 
-## 💻 Formato de Trama de Telemetría JSON (ESP32 $\rightarrow$ App)
+##  Formato de Trama de Telemetría JSON (ESP32 $\rightarrow$ App)
 
 ```json
 {
@@ -117,7 +117,7 @@ graph TD
 
 ---
 
-## 📥 Instalación y Puesta en Marcha
+##  Instalación y Puesta en Marcha
 
 ### 1. Cargar el Firmware en el ESP32
 1. Abre [esp32/pulso_minero_esp32/pulso_minero_esp32.ino](esp32/pulso_minero_esp32/pulso_minero_esp32.ino) en **Arduino IDE**.
@@ -146,7 +146,8 @@ flutter run
 
 ---
 
-## 👥 Equipo de Desarrollo / Autores
+##  Equipo de Desarrollo / Autores
+- **Brayan Alecander Ibarguen Murillo**
 - **Juan Pablo Jorge Calderón**
 - **Proyecto Pulso Minero - PICUR 2**
 - **Grupo 6:** Zona de explotación minera (Vibración por maquinaria pesada - Ferney Pérez).
