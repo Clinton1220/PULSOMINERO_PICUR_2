@@ -135,21 +135,23 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Enviamos un código a ${emailController.text.trim()}.'),
-            const SizedBox(height: 12),
-            const Text(
-              'Modo demo: el código aparece debajo para poder probar el flujo.',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              verificationService.demoCode ?? '',
-              style: const TextStyle(
-                color: AppTheme.lime,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 4,
+            if (verificationService.demoCode != null) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Modo demo: el código aparece debajo para poder probar el flujo.',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
-            ),
+              const SizedBox(height: 8),
+              Text(
+                verificationService.demoCode!,
+                style: const TextStyle(
+                  color: AppTheme.lime,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 4,
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             TextField(
               controller: codeController,
@@ -264,9 +266,39 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       return;
     }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Contraseña actualizada correctamente')));
+
+    try {
+      await authService.resetPassword(
+        email: email,
+        password: newPassword,
+        verificationToken: verificationService.verificationToken,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Contraseña actualizada correctamente. Ya puedes iniciar sesión.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } on StateError catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.message),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo restablecer la contraseña.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 

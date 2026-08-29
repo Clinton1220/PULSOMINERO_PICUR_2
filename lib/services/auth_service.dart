@@ -49,6 +49,24 @@ class AuthService {
     if (response.statusCode != 201) throw StateError(_message(response));
   }
 
+  Future<void> resetPassword({
+    required String email,
+    required String password,
+    String? verificationToken,
+  }) async {
+    if (!isRemote) return;
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/reset-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email.trim(),
+        'password': password,
+        'verificationToken': verificationToken,
+      }),
+    );
+    if (response.statusCode != 200) throw StateError(_message(response));
+  }
+
   String _message(http.Response response) {
     try {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -59,7 +77,8 @@ class AuthService {
   }
 
   static AuthService fromEnvironment() {
-    const url = String.fromEnvironment('API_BASE_URL');
+    const url = String.fromEnvironment('API_BASE_URL',
+        defaultValue: 'http://localhost:3000');
     return AuthService(
         baseUrl: url.isEmpty ? null : url.replaceAll(RegExp(r'/$'), ''));
   }

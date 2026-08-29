@@ -156,7 +156,8 @@ class HttpVerificationService implements VerificationService {
 }
 
 VerificationService createVerificationService() {
-  const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
+  const apiBaseUrl = String.fromEnvironment('API_BASE_URL',
+      defaultValue: 'http://localhost:3000');
   if (apiBaseUrl.isEmpty) return DemoVerificationService();
   return HttpVerificationService(
       baseUrl: apiBaseUrl.replaceAll(RegExp(r'/$'), ''));
