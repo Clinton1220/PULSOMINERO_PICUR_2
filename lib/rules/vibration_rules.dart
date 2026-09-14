@@ -20,7 +20,7 @@ class VibrationRules {
     }
 
     final maximum = samples
-        .map((sample) => sample.magnitude)
+        .map((sample) => sample.dynamicVibration)
         .reduce((a, b) => a > b ? a : b);
     final duration = samples.last.timestamp.difference(samples.first.timestamp);
     final repetitions = _countPeaks(samples);
@@ -77,9 +77,9 @@ class VibrationRules {
   int _countPeaks(List<SensorData> samples) {
     var peaks = 0;
     for (var index = 1; index < samples.length - 1; index++) {
-      final previous = samples[index - 1].magnitude;
-      final current = samples[index].magnitude;
-      final next = samples[index + 1].magnitude;
+      final previous = samples[index - 1].dynamicVibration;
+      final current = samples[index].dynamicVibration;
+      final next = samples[index + 1].dynamicVibration;
       if (current > previous && current >= next && current >= safeThreshold) {
         peaks++;
       }

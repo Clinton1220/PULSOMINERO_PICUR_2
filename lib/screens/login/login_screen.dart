@@ -99,10 +99,13 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       if (!mounted) return;
       openDashboard(context, session);
-    } on StateError catch (error) {
+    } catch (error) {
       if (mounted) {
+        final message = error is StateError
+            ? error.message
+            : 'Error de conexión: $error';
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -316,6 +319,15 @@ class _LoginScreenState extends State<LoginScreen> {
             Text('Google Sign-In quedará conectado al configurar Firebase')));
   }
 
+  void enterOfflineMode() {
+    final email = emailController.text.trim();
+    final session = UserSession(
+      email: email.isNotEmpty ? email : 'operador@pulsominero.com',
+      displayName: 'Operador Minero',
+    );
+    openDashboard(context, session);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -470,6 +482,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.white,
                             side: const BorderSide(color: AppTheme.border),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)))),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                        onPressed: enterOfflineMode,
+                        icon: const Icon(Icons.bolt,
+                            color: AppTheme.lime, size: 22),
+                        label: const Text('Acceso Rápido / Modo ESP32'),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.lime,
+                            side: const BorderSide(color: AppTheme.lime),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10)))),

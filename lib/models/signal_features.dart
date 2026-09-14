@@ -35,7 +35,7 @@ class SignalFeatures {
           dominantFrequency: 0,
           inclination: 0);
     }
-    final values = samples.map((sample) => sample.magnitude).toList();
+    final values = samples.map((sample) => sample.dynamicVibration).toList();
     final mean = values.reduce((a, b) => a + b) / values.length;
     final rms = math.sqrt(
         values.map((value) => value * value).reduce((a, b) => a + b) /

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -31,6 +32,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   AnalysisResult? result;
   DemoMode selectedMode = DemoMode.isolated;
   bool isCapturing = false;
+  bool isPaused = false;
   ConnectionType activeConnection = ConnectionType.simulator;
   String wifiIp = '192.168.4.1';
 
@@ -49,8 +51,22 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   void _listenToSensor() {
     subscription = sensor.readings.listen((reading) {
-      if (mounted) setState(() => samples.add(reading));
+      if (mounted && !isPaused) setState(() => samples.add(reading));
     });
+  }
+
+  void togglePause() {
+    setState(() {
+      isPaused = !isPaused;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isPaused
+            ? '⏸️ Proceso en pausa (datos congelados)'
+            : '▶️ Proceso reanudado (monitoreo en vivo)'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   @override
@@ -66,7 +82,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     setState(() {
       zeroOffsetX = last.accelerationX;
       zeroOffsetY = last.accelerationY;
-      zeroOffsetZ = last.accelerationZ - 9.81;
+      zeroOffsetZ = last.accelerationZ;
       isZeroCalibrated = true;
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -95,6 +111,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       setState(() {
         activeConnection = ConnectionType.simulator;
         isCapturing = true;
+        isPaused = false;
       });
     }
   }
@@ -111,6 +128,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         setState(() {
           activeConnection = ConnectionType.ble;
           isCapturing = true;
+          isPaused = false;
         });
       }
     } on StateError catch (error) {
@@ -190,6 +208,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         setState(() {
           activeConnection = ConnectionType.wifi;
           isCapturing = true;
+          isPaused = false;
         });
       }
     } on StateError catch (error) {
@@ -213,6 +232,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     if (mounted) {
       setState(() {
         isCapturing = false;
+        isPaused = false;
         result = analysis;
       });
     }
@@ -287,6 +307,9 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     if (!isCapturing) {
       return 'Listo para conectar por Wi-Fi, Bluetooth o Simulador';
     }
+    if (isPaused) {
+      return '⏸️ PROCESO PAUSADO · Pantalla congelada (toca Reanudar)';
+    }
     switch (activeConnection) {
       case ConnectionType.ble:
         return 'ESP32 conectado · Transmitiendo por Bluetooth BLE';
@@ -300,14 +323,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   @override
   Widget build(BuildContext context) {
     final lastSample = samples.isEmpty ? null : samples.last;
-    final rawCurrent = lastSample?.magnitude ?? 0.0;
+    final rawCurrent = lastSample?.dynamicVibration ?? 0.0;
     final adjX = (lastSample?.accelerationX ?? 0.0) - zeroOffsetX;
     final adjY = (lastSample?.accelerationY ?? 0.0) - zeroOffsetY;
     final adjZ = (lastSample?.accelerationZ ?? 0.0) - zeroOffsetZ;
     final currentMagnitude = isZeroCalibrated
-        ? (adjX * adjX + adjY * adjY + adjZ * adjZ > 0
-            ? lastSample?.dynamicVibration ?? 0.0
-            : 0.0)
+        ? math.sqrt(adjX * adjX + adjY * adjY + adjZ * adjZ)
         : rawCurrent;
 
     return ListView(
@@ -375,7 +396,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
               ? [0.0]
               : samples
                   .sublist(samples.length > 35 ? samples.length - 35 : 0)
-                  .map((s) => s.magnitude)
+                  .map((s) => isZeroCalibrated
+                      ? math.sqrt(
+                          math.pow(s.accelerationX - zeroOffsetX, 2) +
+                          math.pow(s.accelerationY - zeroOffsetY, 2) +
+                          math.pow(s.accelerationZ - zeroOffsetZ, 2))
+                      : s.dynamicVibration)
                   .toList(),
         ),
         const SizedBox(height: 14),
@@ -402,20 +428,61 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         ),
         const SizedBox(height: 10),
 
-        FilledButton.icon(
-          onPressed: isCapturing ? stopAndAnalyze : startDemo,
-          icon: Icon(isCapturing
-              ? Icons.stop_circle_outlined
-              : Icons.play_circle_outline),
-          label: Text(
-              isCapturing ? 'Detener ensayo y analizar con IA' : 'Iniciar Simulador'),
-          style: FilledButton.styleFrom(
-            backgroundColor:
-                isCapturing ? Colors.redAccent : AppTheme.green,
-            foregroundColor: isCapturing ? Colors.white : Colors.black,
-            padding: const EdgeInsets.symmetric(vertical: 15),
+        if (isCapturing) ...[
+          Row(
+            children: [
+              Expanded(
+                flex: 1,
+                child: OutlinedButton.icon(
+                  onPressed: togglePause,
+                  icon: Icon(
+                    isPaused ? Icons.play_arrow : Icons.pause,
+                    color: isPaused ? AppTheme.green : Colors.amber,
+                    size: 20,
+                  ),
+                  label: Text(
+                    isPaused ? 'Reanudar' : 'Pausar',
+                    style: TextStyle(
+                      color: isPaused ? AppTheme.green : Colors.amber,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: isPaused ? AppTheme.green : Colors.amber,
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: FilledButton.icon(
+                  onPressed: stopAndAnalyze,
+                  icon: const Icon(Icons.stop_circle_outlined),
+                  label: const Text('Detener y Analizar'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
+        ] else ...[
+          FilledButton.icon(
+            onPressed: startDemo,
+            icon: const Icon(Icons.play_circle_outline),
+            label: const Text('Iniciar Simulador'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.green,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
 
         // 5. RESULTADOS DE IA O INSTRUCCIONES

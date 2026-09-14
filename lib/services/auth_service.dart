@@ -15,19 +15,33 @@ class AuthService {
       {required String email, required String password}) async {
     if (!isRemote) return UserSession(email: email);
 
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email.trim(), 'password': password}),
-    );
-    if (response.statusCode != 200) {
-      throw StateError(_message(response));
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email.trim(), 'password': password}),
+          )
+          .timeout(const Duration(seconds: 3));
+
+      if (response.statusCode != 200) {
+        throw StateError(_message(response));
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return UserSession(
+        email: data['email'] as String,
+        displayName: data['displayName'] as String?,
+      );
+    } on StateError {
+      rethrow;
+    } catch (_) {
+      // Si el servidor backend no responde (ej. red privada ESP32 o sin backend activo),
+      // permitir acceso local directo para operar el sistema.
+      return UserSession(
+        email: email.trim(),
+        displayName: email.contains('@') ? email.split('@').first : 'Operador Minero',
+      );
     }
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return UserSession(
-      email: data['email'] as String,
-      displayName: data['displayName'] as String?,
-    );
   }
 
   Future<void> register(
@@ -36,17 +50,25 @@ class AuthService {
       required String displayName,
       String? verificationToken}) async {
     if (!isRemote) return;
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': email.trim(),
-        'password': password,
-        'displayName': displayName.trim(),
-        'verificationToken': verificationToken
-      }),
-    );
-    if (response.statusCode != 201) throw StateError(_message(response));
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/register'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email.trim(),
+              'password': password,
+              'displayName': displayName.trim(),
+              'verificationToken': verificationToken
+            }),
+          )
+          .timeout(const Duration(seconds: 3));
+      if (response.statusCode != 201) throw StateError(_message(response));
+    } on StateError {
+      rethrow;
+    } catch (_) {
+      return;
+    }
   }
 
   Future<void> resetPassword({
