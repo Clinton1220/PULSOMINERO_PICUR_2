@@ -11,7 +11,7 @@ import '../models/vibration_record.dart';
 /// ni dependencias de Gradle complejas.
 class FirebaseCloudService {
   FirebaseCloudService({
-    this.projectId = 'pulso-minero-cloud',
+    this.projectId = 'pulsoMinero',
     http.Client? client,
   }) : _client = client ?? http.Client();
 
