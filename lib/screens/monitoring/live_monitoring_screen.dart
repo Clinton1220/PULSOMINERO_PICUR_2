@@ -42,6 +42,97 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   double zeroOffsetZ = 0.0;
   bool isZeroCalibrated = false;
 
+  // Filtro de Suavizado EMA (Anti-ruido y estabilidad de señal)
+  bool isFilterEnabled = true;
+  static const double _smoothAlpha = 0.28; // Factor de suavizado (reactivo y estable)
+  double? _emaMagnitude;
+  double? _emaX;
+  double? _emaY;
+  double? _emaZ;
+  double? _emaGas;
+  double? _emaPitch;
+  double? _emaRoll;
+
+  void _resetEma() {
+    _emaMagnitude = null;
+    _emaX = null;
+    _emaY = null;
+    _emaZ = null;
+    _emaGas = null;
+    _emaPitch = null;
+    _emaRoll = null;
+  }
+
+  void _updateEma(SensorData reading) {
+    final rawCurrent = reading.dynamicVibration;
+    final adjX = reading.accelerationX - zeroOffsetX;
+    final adjY = reading.accelerationY - zeroOffsetY;
+    final adjZ = reading.accelerationZ - zeroOffsetZ;
+    final currentMag = isZeroCalibrated
+        ? math.sqrt(adjX * adjX + adjY * adjY + adjZ * adjZ)
+        : rawCurrent;
+
+    if (_emaMagnitude == null) {
+      _emaMagnitude = currentMag;
+      _emaX = adjX;
+      _emaY = adjY;
+      _emaZ = adjZ;
+      _emaGas = reading.gasPpm;
+      _emaPitch = reading.inclination;
+      _emaRoll = reading.roll;
+    } else {
+      _emaMagnitude = (_smoothAlpha * currentMag) + ((1.0 - _smoothAlpha) * _emaMagnitude!);
+      _emaX = (_smoothAlpha * adjX) + ((1.0 - _smoothAlpha) * _emaX!);
+      _emaY = (_smoothAlpha * adjY) + ((1.0 - _smoothAlpha) * _emaY!);
+      _emaZ = (_smoothAlpha * adjZ) + ((1.0 - _smoothAlpha) * _emaZ!);
+      _emaGas = (_smoothAlpha * reading.gasPpm) + ((1.0 - _smoothAlpha) * _emaGas!);
+      _emaPitch = (_smoothAlpha * reading.inclination) + ((1.0 - _smoothAlpha) * _emaPitch!);
+      _emaRoll = (_smoothAlpha * reading.roll) + ((1.0 - _smoothAlpha) * _emaRoll!);
+    }
+  }
+
+  void toggleFilter() {
+    setState(() {
+      isFilterEnabled = !isFilterEnabled;
+      if (isFilterEnabled) _resetEma();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isFilterEnabled
+            ? '✨ Filtro EMA activado: Señal suavizada y anti-ruido'
+            : '⚡ Filtro desactivado: Mostrando señal cruda instantánea'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  List<double> _getDisplayWaveformSamples() {
+    if (samples.isEmpty) return [0.0];
+    final window = samples.sublist(samples.length > 35 ? samples.length - 35 : 0);
+    final rawList = window.map((s) {
+      if (isZeroCalibrated) {
+        return math.sqrt(
+          math.pow(s.accelerationX - zeroOffsetX, 2) +
+          math.pow(s.accelerationY - zeroOffsetY, 2) +
+          math.pow(s.accelerationZ - zeroOffsetZ, 2),
+        );
+      } else {
+        return s.dynamicVibration;
+      }
+    }).toList();
+
+    if (!isFilterEnabled || rawList.length < 3) return rawList;
+
+    // Suavizado EMA progresivo sobre la ventana reciente para curva continua
+    final smoothed = <double>[];
+    double current = rawList.first;
+    for (final val in rawList) {
+      current = (_smoothAlpha * val) + ((1.0 - _smoothAlpha) * current);
+      smoothed.add(current);
+    }
+    return smoothed;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -51,7 +142,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   void _listenToSensor() {
     subscription = sensor.readings.listen((reading) {
-      if (mounted && !isPaused) setState(() => samples.add(reading));
+      if (mounted && !isPaused) {
+        setState(() {
+          samples.add(reading);
+          _updateEma(reading);
+        });
+      }
     });
   }
 
@@ -84,6 +180,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       zeroOffsetY = last.accelerationY;
       zeroOffsetZ = last.accelerationZ;
       isZeroCalibrated = true;
+      _resetEma();
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -99,11 +196,13 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       zeroOffsetY = 0.0;
       zeroOffsetZ = 0.0;
       isZeroCalibrated = false;
+      _resetEma();
     });
   }
 
   Future<void> startDemo() async {
     samples.clear();
+    _resetEma();
     result = null;
     sensor.setDemoMode(selectedMode);
     await sensor.connect();
@@ -331,6 +430,15 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         ? math.sqrt(adjX * adjX + adjY * adjY + adjZ * adjZ)
         : rawCurrent;
 
+    // Valores para visualización (suavizados si isFilterEnabled es true)
+    final displayMagnitude = isFilterEnabled ? (_emaMagnitude ?? currentMagnitude) : currentMagnitude;
+    final displayX = isFilterEnabled ? (_emaX ?? adjX) : adjX;
+    final displayY = isFilterEnabled ? (_emaY ?? adjY) : adjY;
+    final displayZ = isFilterEnabled ? (_emaZ ?? adjZ) : adjZ;
+    final displayGas = isFilterEnabled ? (_emaGas ?? (lastSample?.gasPpm ?? 0.0)) : (lastSample?.gasPpm ?? 0.0);
+    final displayPitch = isFilterEnabled ? (_emaPitch ?? (lastSample?.inclination ?? 0.0)) : (lastSample?.inclination ?? 0.0);
+    final displayRoll = isFilterEnabled ? (_emaRoll ?? (lastSample?.roll ?? 0.0)) : (lastSample?.roll ?? 0.0);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: [
@@ -380,29 +488,21 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
         // 3. TARJETA PRINCIPAL DE LECTURAS Y OSCILOSCOPIO
         _ReadingCard(
-          value: currentMagnitude,
+          value: displayMagnitude,
           sampleCount: samples.length,
-          inclination: lastSample?.inclination ?? 0.0,
-          roll: lastSample?.roll ?? 0.0,
-          gasPpm: lastSample?.gasPpm ?? 0.0,
-          accelX: adjX,
-          accelY: adjY,
-          accelZ: adjZ,
+          inclination: displayPitch,
+          roll: displayRoll,
+          gasPpm: displayGas,
+          accelX: displayX,
+          accelY: displayY,
+          accelZ: displayZ,
           chipTemp: lastSample?.temperature ?? 25.0,
           isZeroCalibrated: isZeroCalibrated,
+          isFilterEnabled: isFilterEnabled,
+          onToggleFilter: toggleFilter,
           onCalibrate: calibrateZero,
           onResetCalibrate: resetCalibration,
-          recentSamples: samples.isEmpty
-              ? [0.0]
-              : samples
-                  .sublist(samples.length > 35 ? samples.length - 35 : 0)
-                  .map((s) => isZeroCalibrated
-                      ? math.sqrt(
-                          math.pow(s.accelerationX - zeroOffsetX, 2) +
-                          math.pow(s.accelerationY - zeroOffsetY, 2) +
-                          math.pow(s.accelerationZ - zeroOffsetZ, 2))
-                      : s.dynamicVibration)
-                  .toList(),
+          recentSamples: _getDisplayWaveformSamples(),
         ),
         const SizedBox(height: 14),
 
@@ -619,6 +719,8 @@ class _ReadingCard extends StatelessWidget {
     required this.accelZ,
     required this.chipTemp,
     required this.isZeroCalibrated,
+    required this.isFilterEnabled,
+    required this.onToggleFilter,
     required this.onCalibrate,
     required this.onResetCalibrate,
     required this.recentSamples,
@@ -634,6 +736,8 @@ class _ReadingCard extends StatelessWidget {
   final double accelZ;
   final double chipTemp;
   final bool isZeroCalibrated;
+  final bool isFilterEnabled;
+  final VoidCallback onToggleFilter;
   final VoidCallback onCalibrate;
   final VoidCallback onResetCalibrate;
   final List<double> recentSamples;
@@ -678,12 +782,36 @@ class _ReadingCard extends StatelessWidget {
                       children: [
                         const Text('Vibración Resultante (Geófono)',
                             style: TextStyle(color: Colors.grey, fontSize: 12)),
-                        Text(
-                          '${value.toStringAsFixed(2)} m/s²',
-                          style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
-                              color: vibColor),
+                        Row(
+                          children: [
+                            Text(
+                              '${value.toStringAsFixed(2)} m/s²',
+                              style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                  color: vibColor),
+                            ),
+                            if (isFilterEnabled) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.lime.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                      color: AppTheme.lime.withValues(alpha: 0.4)),
+                                ),
+                                child: const Text(
+                                  'EMA SUAVE',
+                                  style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.lime),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),
@@ -734,6 +862,7 @@ class _ReadingCard extends StatelessWidget {
                   painter: _LiveWaveformPainter(
                     samples: recentSamples,
                     lineColor: vibColor,
+                    isSmooth: isFilterEnabled,
                   ),
                 ),
               ),
@@ -750,24 +879,71 @@ class _ReadingCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
 
-              // Barra de herramientas de calibración y conteo
+              // Barra de herramientas de calibración, filtro anti-ruido y conteo
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  TextButton.icon(
-                    onPressed: isZeroCalibrated ? onResetCalibrate : onCalibrate,
-                    icon: Icon(
-                      isZeroCalibrated ? Icons.restart_alt : Icons.filter_alt,
-                      size: 15,
-                      color: AppTheme.lime,
-                    ),
-                    label: Text(
-                      isZeroCalibrated ? 'Restablecer Tara' : 'Calibrar Cero (Tara)',
-                      style: const TextStyle(fontSize: 11, color: AppTheme.lime),
-                    ),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: isZeroCalibrated ? onResetCalibrate : onCalibrate,
+                        icon: Icon(
+                          isZeroCalibrated ? Icons.restart_alt : Icons.filter_alt,
+                          size: 15,
+                          color: AppTheme.lime,
+                        ),
+                        label: Text(
+                          isZeroCalibrated ? 'Restablecer Tara' : 'Tara Cero',
+                          style: const TextStyle(fontSize: 11, color: AppTheme.lime),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      InkWell(
+                        onTap: onToggleFilter,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isFilterEnabled
+                                ? AppTheme.green.withValues(alpha: 0.18)
+                                : Colors.white10,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: isFilterEnabled
+                                  ? AppTheme.green.withValues(alpha: 0.5)
+                                  : Colors.white24,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.auto_awesome,
+                                size: 12,
+                                color: isFilterEnabled
+                                    ? AppTheme.green
+                                    : Colors.grey,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isFilterEnabled ? 'Filtro ON' : 'Filtro OFF',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isFilterEnabled
+                                      ? AppTheme.green
+                                      : Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   Text(
-                    '$sampleCount muestras · ${chipTemp.toStringAsFixed(1)}°C',
+                    '$sampleCount pts · ${chipTemp.toStringAsFixed(1)}°C',
                     style: const TextStyle(color: Colors.grey, fontSize: 11),
                   ),
                 ],
@@ -882,9 +1058,15 @@ class _AxisChip extends StatelessWidget {
 }
 
 class _LiveWaveformPainter extends CustomPainter {
-  _LiveWaveformPainter({required this.samples, required this.lineColor});
+  _LiveWaveformPainter({
+    required this.samples,
+    required this.lineColor,
+    this.isSmooth = true,
+  });
+
   final List<double> samples;
   final Color lineColor;
+  final bool isSmooth;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -894,7 +1076,8 @@ class _LiveWaveformPainter extends CustomPainter {
       ..color = lineColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.2
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
 
     final fillPaint = Paint()
       ..shader = LinearGradient(
@@ -911,29 +1094,43 @@ class _LiveWaveformPainter extends CustomPainter {
     final maxVal = samples.reduce((a, b) => a > b ? a : b).clamp(3.0, 20.0);
     final dx = size.width / (samples.length > 1 ? (samples.length - 1) : 1);
 
-    final path = Path();
-    final fillPath = Path();
-
+    final points = <Offset>[];
     for (var i = 0; i < samples.length; i++) {
       final x = i * dx;
       final normalized = (samples[i] / maxVal).clamp(0.0, 1.0);
-      final y = size.height - (normalized * (size.height - 8) + 4);
-
-      if (i == 0) {
-        path.moveTo(x, y);
-        fillPath.moveTo(x, size.height);
-        fillPath.lineTo(x, y);
-      } else {
-        path.lineTo(x, y);
-        fillPath.lineTo(x, y);
-      }
+      final y = size.height - (normalized * (size.height - 10) + 5);
+      points.add(Offset(x, y));
     }
 
-    fillPath.lineTo(size.width, size.height);
-    fillPath.close();
+    final path = Path();
+    final fillPath = Path();
 
-    canvas.drawPath(fillPath, fillPaint);
-    canvas.drawPath(path, paint);
+    if (points.isNotEmpty) {
+      path.moveTo(points.first.dx, points.first.dy);
+      fillPath.moveTo(points.first.dx, size.height);
+      fillPath.lineTo(points.first.dx, points.first.dy);
+
+      if (isSmooth && points.length > 2) {
+        for (var i = 1; i < points.length; i++) {
+          final p0 = points[i - 1];
+          final p1 = points[i];
+          final midX = (p0.dx + p1.dx) / 2;
+          path.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
+          fillPath.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
+        }
+      } else {
+        for (var i = 1; i < points.length; i++) {
+          path.lineTo(points[i].dx, points[i].dy);
+          fillPath.lineTo(points[i].dx, points[i].dy);
+        }
+      }
+
+      fillPath.lineTo(points.last.dx, size.height);
+      fillPath.close();
+
+      canvas.drawPath(fillPath, fillPaint);
+      canvas.drawPath(path, paint);
+    }
   }
 
   @override

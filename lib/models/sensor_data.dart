@@ -95,9 +95,11 @@ class SensorData {
       accelerationY * accelerationY +
       accelerationZ * accelerationZ);
 
-  /// Vibración dinámica neta (descontando la gravedad de 9.81 m/s²): |√(x²+y²+z²) - 9.81|
+  /// Vibración dinámica neta (descontando la gravedad de 9.81 m/s² cuando está presente):
   double get dynamicVibration {
     if (magnitude == 0.0) return 0.0;
+    // Si la magnitud es menor a 5.0 m/s², corresponde a datos compensados o pruebas sin gravedad
+    if (magnitude < 5.0) return magnitude;
     final net = magnitude - 9.81;
     return net.abs();
   }
