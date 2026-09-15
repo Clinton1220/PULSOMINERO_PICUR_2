@@ -323,17 +323,43 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   Future<void> stopAndAnalyze() async {
     await sensor.disconnect();
     final analysis = ai.analyze(samples);
-    await widget.storage.saveRecord(VibrationRecord(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
-        startedAt: samples.isEmpty ? DateTime.now() : samples.first.timestamp,
-        samples: List.unmodifiable(samples),
-        analysis: analysis));
+    final newRecord = VibrationRecord(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      startedAt: samples.isEmpty ? DateTime.now() : samples.first.timestamp,
+      samples: List.unmodifiable(samples),
+      analysis: analysis,
+    );
+    final isSynced = await widget.storage.saveRecord(newRecord);
     if (mounted) {
       setState(() {
         isCapturing = false;
         isPaused = false;
         result = analysis;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.surface,
+          content: Row(
+            children: [
+              Icon(
+                isSynced ? Icons.cloud_done : Icons.save,
+                color: isSynced ? AppTheme.green : Colors.amber,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isSynced
+                      ? '☁️ Ensayo guardado y sincronizado en Firebase Firestore'
+                      : '💾 Ensayo guardado localmente (se sincronizará al conectar internet)',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
