@@ -29,6 +29,88 @@ unsigned long sequence = 0;
 unsigned long lastSendTime = 0;
 const unsigned long INTERVAL_MS = 250; // 4 muestras por segundo (4 Hz) - óptimo para estabilidad y fluidez en app
 
+// =================================================================
+// INICIALIZACIÓN Y RECONEXIÓN DINÁMICA DEL MPU6050
+// =================================================================
+bool initMpu() {
+  byte foundAddress = 0;
+  int sdaActive = 21, sclActive = 22;
+
+  // Intento 1: Pines estándar D21 (SDA) y D22 (SCL)
+  Wire.end();
+  Wire.begin(21, 22);
+  Wire.setClock(100000);
+  for (byte address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    if (Wire.endTransmission() == 0) {
+      foundAddress = address;
+      sdaActive = 21; sclActive = 22;
+      break;
+    }
+  }
+
+  // Intento 2: Pines alternativos D19 (SDA) y D18 (SCL)
+  if (foundAddress == 0) {
+    Wire.end();
+    Wire.begin(19, 18);
+    Wire.setClock(100000);
+    for (byte address = 1; address < 127; address++) {
+      Wire.beginTransmission(address);
+      if (Wire.endTransmission() == 0) {
+        foundAddress = address;
+        sdaActive = 19; sclActive = 18;
+        break;
+      }
+    }
+  }
+
+  // Intento 3: Pines D4 (SDA) y D5 (SCL)
+  if (foundAddress == 0) {
+    Wire.end();
+    Wire.begin(4, 5);
+    Wire.setClock(100000);
+    for (byte address = 1; address < 127; address++) {
+      Wire.beginTransmission(address);
+      if (Wire.endTransmission() == 0) {
+        foundAddress = address;
+        sdaActive = 4; sclActive = 5;
+        break;
+      }
+    }
+  }
+
+  if (foundAddress != 0) {
+    mpuAddress = foundAddress;
+    Wire.beginTransmission(mpuAddress);
+    Wire.write(0x6B);
+    Wire.write(0x00);
+    byte pwrErr = Wire.endTransmission();
+
+    if (pwrErr == 0) {
+      Wire.beginTransmission(mpuAddress);
+      Wire.write(0x1C);
+      Wire.write(0x00);
+      Wire.endTransmission();
+
+      Wire.beginTransmission(mpuAddress);
+      Wire.write(0x1A);
+      Wire.write(0x05);
+      Wire.endTransmission();
+
+      mpuOk = true;
+      Serial.printf("✅ Sensor MPU6050 inicializado con ÉXITO (I2C: 0x%02X, SDA: GPIO %d, SCL: GPIO %d)\n",
+                    mpuAddress, sdaActive, sclActive);
+      return true;
+    }
+  }
+
+  // Si no se detectó, dejar el bus listo en los pines estándar 21 y 22
+  Wire.end();
+  Wire.begin(21, 22);
+  mpuOk = false;
+  return false;
+}
+
 void setup() {
   Serial.begin(115200);
   delay(500);
@@ -43,106 +125,16 @@ void setup() {
   Serial.print("✅ Sensor MQ-135 (Gas/Atmósfera): Activo en GPIO 34 | Lectura inicial ADC: ");
   Serial.println(initialGas);
 
-  // 2. Inicializar I2C con Detección Automática de Pines
+  // 2. Inicializar MPU6050
   Serial.println("\n------------------------------------------------------------");
-  Serial.println("🔍 DIAGNÓSTICO I2C: Buscando MPU6050 por I2C directo...");
-  
-  byte foundAddress = 0;
-  int sdaActive = 21, sclActive = 22;
-
-  // Intento 1: Pines estándar D21 (SDA) y D22 (SCL)
-  Serial.println("   -> Probando en pines D21 (SDA) y D22 (SCL)...");
-  Wire.begin(21, 22);
-  Wire.setClock(100000);
-  for (byte address = 1; address < 127; address++) {
-    Wire.beginTransmission(address);
-    if (Wire.endTransmission() == 0) {
-      foundAddress = address;
-      sdaActive = 21; sclActive = 22;
-      Serial.printf("   🎉 ¡SENSOR DETECTADO EN PINES D21 y D22! Dirección: 0x%02X\n", address);
-      break;
-    }
-  }
-
-  // Intento 2: Pines alternativos D19 (SDA) y D18 (SCL)
-  if (foundAddress == 0) {
-    Serial.println("   -> Probando en pines D19 (SDA) y D18 (SCL)...");
-    Wire.end();
-    Wire.begin(19, 18);
-    Wire.setClock(100000);
-    for (byte address = 1; address < 127; address++) {
-      Wire.beginTransmission(address);
-      if (Wire.endTransmission() == 0) {
-        foundAddress = address;
-        sdaActive = 19; sclActive = 18;
-        Serial.printf("   🎉 ¡SENSOR DETECTADO EN PINES D19 y D18! Dirección: 0x%02X\n", address);
-        break;
-      }
-    }
-  }
-
-  // Intento 3: Pines D4 (SDA) y D5 (SCL)
-  if (foundAddress == 0) {
-    Serial.println("   -> Probando en pines D4 (SDA) y D5 (SCL)...");
-    Wire.end();
-    Wire.begin(4, 5);
-    Wire.setClock(100000);
-    for (byte address = 1; address < 127; address++) {
-      Wire.beginTransmission(address);
-      if (Wire.endTransmission() == 0) {
-        foundAddress = address;
-        sdaActive = 4; sclActive = 5;
-        Serial.printf("   🎉 ¡SENSOR DETECTADO EN PINES D4 y D5! Dirección: 0x%02X\n", address);
-        break;
-      }
-    }
-  }
-
-  // 3. Inicializar y despertar MPU6050 de forma directa (Compatible con clones y originales)
-  if (foundAddress != 0) {
-    mpuAddress = foundAddress;
-
-    // Despertar el sensor: escribir 0 en registro 0x6B (PWR_MGMT_1)
-    Wire.beginTransmission(mpuAddress);
-    Wire.write(0x6B);
-    Wire.write(0x00);
-    byte pwrErr = Wire.endTransmission();
-
-    if (pwrErr == 0) {
-      // Configurar rango de acelerómetro a +-2g (registro 0x1C = 0x00)
-      Wire.beginTransmission(mpuAddress);
-      Wire.write(0x1C);
-      Wire.write(0x00);
-      Wire.endTransmission();
-
-      // Configurar filtro DLPF a ~10-20 Hz para estabilidad (registro 0x1A = 0x05)
-      Wire.beginTransmission(mpuAddress);
-      Wire.write(0x1A);
-      Wire.write(0x05);
-      Wire.endTransmission();
-
-      // Leer identificador WHO_AM_I informativo
-      Wire.beginTransmission(mpuAddress);
-      Wire.write(0x75);
-      Wire.endTransmission(false);
-      Wire.requestFrom((int)mpuAddress, 1);
-      byte chipId = Wire.available() ? Wire.read() : 0x00;
-
-      mpuOk = true;
-      Serial.printf("✅ Sensor MPU6050 inicializado con ÉXITO (I2C: 0x%02X, WHO_AM_I: 0x%02X, SDA: GPIO %d, SCL: GPIO %d)\n",
-                    mpuAddress, chipId, sdaActive, sclActive);
-    } else {
-      mpuOk = false;
-      Serial.printf("❌ Error al despertar el sensor en 0x%02X (Error: %d)\n", mpuAddress, pwrErr);
-    }
-  } else {
-    mpuOk = false;
+  Serial.println("🔍 DIAGNÓSTICO I2C: Buscando MPU6050...");
+  if (!initMpu()) {
     Serial.println("❌ ERROR I2C: No se detectó ningún sensor en el bus.");
     Serial.println("   Revisa que los cables no estén rotos o prueba con pines D21 (SDA) y D22 (SCL).");
-    Serial.println("⚠️ Modo Simulación de Respaldo activo.");
+    Serial.println("   (El sistema reintentará detectarlo automáticamente)");
   }
   Serial.println("------------------------------------------------------------\n");
-  delay(1500);
+  delay(1000);
 
   // 4. Crear Punto de Acceso Wi-Fi
   WiFi.mode(WIFI_AP);
@@ -161,6 +153,17 @@ void setup() {
 }
 
 void loop() {
+  unsigned long now = millis();
+
+  // Si el MPU6050 no está detectado, intentar reconectar automáticamente cada 2.5 segundos
+  static unsigned long lastMpuRetry = 0;
+  if (!mpuOk && (now - lastMpuRetry >= 2500)) {
+    lastMpuRetry = now;
+    if (initMpu()) {
+      Serial.println("🎉 ¡MPU6050 detectado y conectado con éxito!");
+    }
+  }
+
   // Aceptar nueva conexión de la app
   if (!client || !client.connected()) {
     client = server.available();
@@ -169,7 +172,6 @@ void loop() {
     }
   }
 
-  unsigned long now = millis();
   if (now - lastSendTime >= INTERVAL_MS) {
     lastSendTime = now;
 
@@ -207,23 +209,55 @@ void loop() {
         gy = (rawGyY / 131.0f) * (PI / 180.0f);
         gz = (rawGyZ / 131.0f) * (PI / 180.0f);
 
-        // Inclinación (Pitch y Roll) en grados
+        // 1. Inclinación física (Pitch y Roll) calculada con la gravedad estática
         inclination = atan2(ax, az) * 180.0f / PI;
         roll = atan2(ay, sqrt(ax * ax + az * az)) * 180.0f / PI;
+
+        // 2. Autotara y Filtro de Gravedad Terrestre:
+        // Separa la gravedad estática continua (~9.78 m/s²) de la vibración dinámica real
+        static float gravX = 0.0f, gravY = 0.0f, gravZ = 9.80665f;
+        static bool gravInit = false;
+        if (!gravInit) {
+          gravX = ax;
+          gravY = ay;
+          gravZ = az;
+          gravInit = true;
+        } else {
+          // Filtro paso-bajo lento: retiene la gravedad estática y no reacciona a sacudidas rápidas
+          gravX = (0.96f * gravX) + (0.04f * ax);
+          gravY = (0.96f * gravY) + (0.04f * ay);
+          gravZ = (0.96f * gravZ) + (0.04f * az);
+        }
+
+        // 3. Vibración dinámica neta (descontando la gravedad en reposo):
+        float vibX = ax - gravX;
+        float vibY = ay - gravY;
+        float vibZ = az - gravZ;
+
+        // Banda muerta para absorber el ruido eléctrico de silicio en reposo:
+        if (fabs(vibX) < 0.12f) vibX = 0.0f;
+        if (fabs(vibY) < 0.12f) vibY = 0.0f;
+        if (fabs(vibZ) < 0.12f) vibZ = 0.0f;
+
+        // Se envía a la app la vibración pura (en reposo será 0.00 m/s²):
+        ax = vibX;
+        ay = vibY;
+        az = vibZ;
       } else {
         // En caso de microdesconexión puntual, no bloquear
         ax = 0.0f; ay = 0.0f; az = 9.81f;
       }
     } else {
-      // Simulación de respaldo en caso de desconexión de hardware
-      float tSim = now / 1000.0f;
-      float noise = ((rand() % 100) - 50) / 250.0f;
-      ax = 0.7f * sin(2.0f * PI * 2.0f * tSim) + noise;
-      ay = 0.3f * cos(2.0f * PI * 1.5f * tSim) + (noise * 0.5f);
-      az = 9.81f + 0.35f * sin(2.0f * PI * 3.0f * tSim);
-      inclination = 2.0f + 1.2f * sin(tSim * 0.5f);
-      roll = 1.0f + 0.8f * cos(tSim * 0.5f);
-      temp = 26.5f;
+      // Sensor físico no detectado: reportar cero real para no generar falsos positivos
+      ax = 0.0f;
+      ay = 0.0f;
+      az = 0.0f;
+      gx = 0.0f;
+      gy = 0.0f;
+      gz = 0.0f;
+      inclination = 0.0f;
+      roll = 0.0f;
+      temp = 0.0f;
     }
 
     // 2. Lectura del Sensor de Gas MQ-135 con sobremuestreo (promedio de 16 lecturas para filtrar ruido ADC)
@@ -234,8 +268,19 @@ void loop() {
     }
     int gasRaw = gasSum / 16;
     float gasVolt = (gasRaw / 4095.0f) * 3.3f;
-    // Conversión a PPM estimado (Aire limpio: ~400 PPM, Humo/Gases: > 1000 PPM)
-    float gasPpm = (gasRaw / 4095.0f) * 2000.0f + 350.0f;
+
+    // Conversión realista a PPM:
+    // Aire ambiente limpio: 380 - 450 PPM (Normal)
+    // Presencia moderada de gases: 500 - 800 PPM (Precaución)
+    // Concentración peligrosa / humo: > 1000 PPM (Alerta)
+    float gasPpm = 400.0f;
+    if (gasVolt > 0.70f) {
+      float deltaV = gasVolt - 0.70f;
+      gasPpm = 400.0f + (deltaV * 280.0f) + (deltaV * deltaV * 320.0f);
+    } else {
+      gasPpm = 350.0f + (gasVolt / 0.70f) * 50.0f;
+    }
+    if (gasPpm > 2500.0f) gasPpm = 2500.0f;
 
     // 3. Formatear Trama JSON Completa
     char payload[250];

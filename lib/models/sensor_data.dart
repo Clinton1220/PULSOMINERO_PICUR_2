@@ -95,12 +95,13 @@ class SensorData {
       accelerationY * accelerationY +
       accelerationZ * accelerationZ);
 
-  /// Vibración dinámica neta (descontando la gravedad de 9.81 m/s² cuando está presente):
+  /// Vibración dinámica neta (descontando la gravedad de 9.81 m/s²):
   double get dynamicVibration {
-    if (magnitude == 0.0) return 0.0;
-    // Si la magnitud es menor a 5.0 m/s², corresponde a datos compensados o pruebas sin gravedad
-    if (magnitude < 5.0) return magnitude;
-    final net = magnitude - 9.81;
-    return net.abs();
+    if (!mpuOk || magnitude == 0.0) return 0.0;
+    // Descontar la componente de gravedad estática terrestre:
+    final net = (magnitude - 9.80665).abs();
+    // Banda muerta de 0.10 m/s² para filtrar el micro-ruido de reposo del acelerómetro:
+    if (net < 0.10) return 0.0;
+    return net;
   }
 }
