@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -36,12 +35,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   ConnectionType activeConnection = ConnectionType.simulator;
   String wifiIp = '192.168.4.1';
 
-  // Calibración de cero (Tara)
-  double zeroOffsetX = 0.0;
-  double zeroOffsetY = 0.0;
-  double zeroOffsetZ = 0.0;
-  bool isZeroCalibrated = false;
-
   // Filtro de Suavizado EMA (Anti-ruido y estabilidad de señal)
   bool isFilterEnabled = true;
   static const double _smoothAlpha = 0.28; // Factor de suavizado (reactivo y estable)
@@ -64,13 +57,10 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   }
 
   void _updateEma(SensorData reading) {
-    final rawCurrent = reading.dynamicVibration;
-    final adjX = reading.accelerationX - zeroOffsetX;
-    final adjY = reading.accelerationY - zeroOffsetY;
-    final adjZ = reading.accelerationZ - zeroOffsetZ;
-    final currentMag = isZeroCalibrated
-        ? math.sqrt(adjX * adjX + adjY * adjY + adjZ * adjZ)
-        : rawCurrent;
+    final currentMag = reading.dynamicVibration;
+    final adjX = reading.accelerationX;
+    final adjY = reading.accelerationY;
+    final adjZ = reading.accelerationZ;
 
     if (_emaMagnitude == null) {
       _emaMagnitude = currentMag;
@@ -109,17 +99,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   List<double> _getDisplayWaveformSamples() {
     if (samples.isEmpty) return [0.0];
     final window = samples.sublist(samples.length > 35 ? samples.length - 35 : 0);
-    final rawList = window.map((s) {
-      if (isZeroCalibrated) {
-        return math.sqrt(
-          math.pow(s.accelerationX - zeroOffsetX, 2) +
-          math.pow(s.accelerationY - zeroOffsetY, 2) +
-          math.pow(s.accelerationZ - zeroOffsetZ, 2),
-        );
-      } else {
-        return s.dynamicVibration;
-      }
-    }).toList();
+    final rawList = window.map((s) => s.dynamicVibration).toList();
 
     if (!isFilterEnabled || rawList.length < 3) return rawList;
 
@@ -172,33 +152,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     super.dispose();
   }
 
-  void calibrateZero() {
-    if (samples.isEmpty) return;
-    final last = samples.last;
-    setState(() {
-      zeroOffsetX = last.accelerationX;
-      zeroOffsetY = last.accelerationY;
-      zeroOffsetZ = last.accelerationZ;
-      isZeroCalibrated = true;
-      _resetEma();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('✅ Punto cero calibrado. Mediciones ajustadas a 0.00 m/s²'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
-  void resetCalibration() {
-    setState(() {
-      zeroOffsetX = 0.0;
-      zeroOffsetY = 0.0;
-      zeroOffsetZ = 0.0;
-      isZeroCalibrated = false;
-      _resetEma();
-    });
-  }
 
   Future<void> startDemo() async {
     samples.clear();
@@ -448,13 +401,10 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   @override
   Widget build(BuildContext context) {
     final lastSample = samples.isEmpty ? null : samples.last;
-    final rawCurrent = lastSample?.dynamicVibration ?? 0.0;
-    final adjX = (lastSample?.accelerationX ?? 0.0) - zeroOffsetX;
-    final adjY = (lastSample?.accelerationY ?? 0.0) - zeroOffsetY;
-    final adjZ = (lastSample?.accelerationZ ?? 0.0) - zeroOffsetZ;
-    final currentMagnitude = isZeroCalibrated
-        ? math.sqrt(adjX * adjX + adjY * adjY + adjZ * adjZ)
-        : rawCurrent;
+    final currentMagnitude = lastSample?.dynamicVibration ?? 0.0;
+    final adjX = lastSample?.accelerationX ?? 0.0;
+    final adjY = lastSample?.accelerationY ?? 0.0;
+    final adjZ = lastSample?.accelerationZ ?? 0.0;
 
     // Valores para visualización (suavizados si isFilterEnabled es true)
     final displayMagnitude = isFilterEnabled ? (_emaMagnitude ?? currentMagnitude) : currentMagnitude;
@@ -523,11 +473,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
           accelY: displayY,
           accelZ: displayZ,
           chipTemp: lastSample?.temperature ?? 25.0,
-          isZeroCalibrated: isZeroCalibrated,
           isFilterEnabled: isFilterEnabled,
           onToggleFilter: toggleFilter,
-          onCalibrate: calibrateZero,
-          onResetCalibrate: resetCalibration,
           recentSamples: _getDisplayWaveformSamples(),
         ),
         const SizedBox(height: 14),
@@ -744,11 +691,8 @@ class _ReadingCard extends StatelessWidget {
     required this.accelY,
     required this.accelZ,
     required this.chipTemp,
-    required this.isZeroCalibrated,
     required this.isFilterEnabled,
     required this.onToggleFilter,
-    required this.onCalibrate,
-    required this.onResetCalibrate,
     required this.recentSamples,
   });
 
@@ -761,11 +705,8 @@ class _ReadingCard extends StatelessWidget {
   final double accelY;
   final double accelZ;
   final double chipTemp;
-  final bool isZeroCalibrated;
   final bool isFilterEnabled;
   final VoidCallback onToggleFilter;
-  final VoidCallback onCalibrate;
-  final VoidCallback onResetCalibrate;
   final List<double> recentSamples;
 
   @override
@@ -911,19 +852,6 @@ class _ReadingCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      TextButton.icon(
-                        onPressed: isZeroCalibrated ? onResetCalibrate : onCalibrate,
-                        icon: Icon(
-                          isZeroCalibrated ? Icons.restart_alt : Icons.filter_alt,
-                          size: 15,
-                          color: AppTheme.lime,
-                        ),
-                        label: Text(
-                          isZeroCalibrated ? 'Restablecer Tara' : 'Tara Cero',
-                          style: const TextStyle(fontSize: 11, color: AppTheme.lime),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
                       InkWell(
                         onTap: onToggleFilter,
                         borderRadius: BorderRadius.circular(6),

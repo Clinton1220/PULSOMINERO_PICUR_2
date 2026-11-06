@@ -95,12 +95,17 @@ class SensorData {
       accelerationY * accelerationY +
       accelerationZ * accelerationZ);
 
-  /// Vibración dinámica neta (descontando la gravedad de 9.81 m/s²):
+  /// Vibración dinámica neta (descontando la gravedad estática):
   double get dynamicVibration {
     if (!mpuOk || magnitude == 0.0) return 0.0;
-    // Descontar la componente de gravedad estática terrestre:
+    // Si la señal ya tiene la gravedad descontada automáticamente desde el ESP32:
+    if (magnitude < 6.0) {
+      // Banda muerta para filtrar micro-ruido de silicio en reposo:
+      if (magnitude < 0.08) return 0.0;
+      return magnitude;
+    }
+    // Si la señal incluye la gravedad estática terrestre completa (~9.81 m/s²):
     final net = (magnitude - 9.80665).abs();
-    // Banda muerta de 0.10 m/s² para filtrar el micro-ruido de reposo del acelerómetro:
     if (net < 0.10) return 0.0;
     return net;
   }
