@@ -2,9 +2,7 @@ package com.example.pulso_minero
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.Ringtone
-import android.media.RingtoneManager
-import android.net.Uri
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -15,7 +13,8 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val channelName = "com.pulsominero.alert/alarm"
-    private var ringtone: Ringtone? = null
+    private var mediaPlayer: MediaPlayer? = null
+    private var isAlarmActive = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -38,26 +37,31 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun triggerAlarm() {
+        if (isAlarmActive) return
+        isAlarmActive = true
+
         try {
-            if (ringtone == null || !ringtone!!.isPlaying) {
-                var alarmUri: Uri? = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                if (alarmUri == null) {
-                    alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            // 1. Sirena Industrial de Emergencia
+            val resId = resources.getIdentifier("alarm_industrial", "raw", packageName)
+            if (resId != 0) {
+                if (mediaPlayer == null) {
+                    mediaPlayer = MediaPlayer.create(applicationContext, resId)
+                    mediaPlayer?.isLooping = true
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        mediaPlayer?.setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_ALARM)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .build()
+                        )
+                    }
                 }
-                if (alarmUri == null) {
-                    alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                if (mediaPlayer?.isPlaying == false) {
+                    mediaPlayer?.start()
                 }
-                ringtone = RingtoneManager.getRingtone(applicationContext, alarmUri)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    val audioAttributes = AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                    ringtone?.audioAttributes = audioAttributes
-                }
-                ringtone?.play()
             }
 
+            // 2. Vibración de advertencia continua
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
                 vibratorManager?.defaultVibrator
@@ -68,13 +72,13 @@ class MainActivity : FlutterActivity() {
 
             vibrator?.let { v ->
                 if (v.hasVibrator()) {
-                    val timings = longArrayOf(0, 500, 200, 500)
+                    val timings = longArrayOf(0, 350, 150, 350, 150, 350, 400)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        val effect = VibrationEffect.createWaveform(timings, -1)
+                        val effect = VibrationEffect.createWaveform(timings, 0)
                         v.vibrate(effect)
                     } else {
                         @Suppress("DEPRECATION")
-                        v.vibrate(timings, -1)
+                        v.vibrate(timings, 0)
                     }
                 }
             }
@@ -84,10 +88,16 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun stopAlarm() {
+        isAlarmActive = false
         try {
-            if (ringtone != null && ringtone!!.isPlaying) {
-                ringtone?.stop()
+            if (mediaPlayer != null) {
+                if (mediaPlayer!!.isPlaying) {
+                    mediaPlayer!!.stop()
+                }
+                mediaPlayer!!.release()
+                mediaPlayer = null
             }
+
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
                 vibratorManager?.defaultVibrator

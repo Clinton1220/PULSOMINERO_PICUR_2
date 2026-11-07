@@ -6,7 +6,6 @@ class AlertSoundService {
   static const MethodChannel _channel =
       MethodChannel('com.pulsominero.alert/alarm');
 
-  DateTime? _lastAlertTime;
   bool _isCurrentlyAlarming = false;
 
   bool get isCurrentlyAlarming => _isCurrentlyAlarming;
@@ -18,11 +17,8 @@ class AlertSoundService {
     final isCritical = vibration >= 2.0 || gasPpm > 1000.0;
 
     if (isCritical) {
-      _isCurrentlyAlarming = true;
-      final now = DateTime.now();
-      if (_lastAlertTime == null ||
-          now.difference(_lastAlertTime!).inMilliseconds >= 1800) {
-        _lastAlertTime = now;
+      if (!_isCurrentlyAlarming) {
+        _isCurrentlyAlarming = true;
         try {
           await _channel.invokeMethod('playCriticalAlarm');
         } catch (e) {
@@ -31,7 +27,6 @@ class AlertSoundService {
 
         try {
           await HapticFeedback.heavyImpact();
-          await SystemSound.play(SystemSoundType.alert);
         } catch (_) {}
       }
     } else {
@@ -42,8 +37,8 @@ class AlertSoundService {
   }
 
   Future<void> stop() async {
+    if (!_isCurrentlyAlarming) return;
     _isCurrentlyAlarming = false;
-    _lastAlertTime = null;
     try {
       await _channel.invokeMethod('stopCriticalAlarm');
     } catch (e) {
@@ -55,4 +50,3 @@ class AlertSoundService {
     stop();
   }
 }
-
