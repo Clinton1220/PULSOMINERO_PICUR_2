@@ -58,7 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: selectedIndex,
         onDestinationSelected: (index) => setState(() => selectedIndex = index),
         backgroundColor: const Color(0xFF111618),
-        indicatorColor: AppTheme.green.withOpacity(.2),
+        indicatorColor: AppTheme.green.withValues(alpha: .2),
         destinations: const [
           NavigationDestination(
               icon: Icon(Icons.home_outlined),
@@ -130,8 +130,8 @@ class DashboardContent extends StatelessWidget {
             Expanded(
                 child: MetricCard(
                     title: 'Vibración actual',
-                    value: '0.28',
-                    unit: 'mm/s',
+                    value: '0.00',
+                    unit: 'm/s²',
                     status: 'Baja',
                     icon: Icons.graphic_eq)),
             SizedBox(width: 12),

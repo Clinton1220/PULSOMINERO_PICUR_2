@@ -21,18 +21,17 @@ class LiveMonitoringScreen extends StatefulWidget {
   State<LiveMonitoringScreen> createState() => _LiveMonitoringScreenState();
 }
 
-enum ConnectionType { simulator, ble, wifi }
+enum ConnectionType { none, ble, wifi }
 
 class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   final ai = AiService();
   final samples = <SensorData>[];
-  late SensorService sensor;
+  SensorService? sensor;
   StreamSubscription<SensorData>? subscription;
   AnalysisResult? result;
-  DemoMode selectedMode = DemoMode.isolated;
   bool isCapturing = false;
   bool isPaused = false;
-  ConnectionType activeConnection = ConnectionType.simulator;
+  ConnectionType activeConnection = ConnectionType.none;
   String wifiIp = '192.168.4.1';
 
   // Filtro de Suavizado EMA (Anti-ruido y estabilidad de señal)
@@ -113,15 +112,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     return smoothed;
   }
 
-  @override
-  void initState() {
-    super.initState();
-    sensor = SensorSimulator();
-    _listenToSensor();
-  }
-
   void _listenToSensor() {
-    subscription = sensor.readings.listen((reading) {
+    subscription = sensor?.readings.listen((reading) {
       if (mounted && !isPaused) {
         setState(() {
           samples.add(reading);
@@ -148,34 +140,21 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   @override
   void dispose() {
     subscription?.cancel();
-    sensor.dispose();
+    sensor?.dispose();
     super.dispose();
-  }
-
-
-  Future<void> startDemo() async {
-    samples.clear();
-    _resetEma();
-    result = null;
-    sensor.setDemoMode(selectedMode);
-    await sensor.connect();
-    if (mounted) {
-      setState(() {
-        activeConnection = ConnectionType.simulator;
-        isCapturing = true;
-        isPaused = false;
-      });
-    }
   }
 
   Future<void> connectEsp32Ble() async {
     if (isCapturing) return;
+    samples.clear();
+    _resetEma();
+    result = null;
     await subscription?.cancel();
-    await sensor.dispose();
+    await sensor?.dispose();
     sensor = BleSensorService();
     _listenToSensor();
     try {
-      await sensor.connect();
+      await sensor!.connect();
       if (mounted) {
         setState(() {
           activeConnection = ConnectionType.ble;
@@ -187,8 +166,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
-        await sensor.disconnect();
-        setState(() => activeConnection = ConnectionType.simulator);
+        await sensor?.disconnect();
+        setState(() => activeConnection = ConnectionType.none);
       }
     }
   }
@@ -250,12 +229,15 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   Future<void> connectEsp32Wifi(String ip) async {
     if (isCapturing) return;
+    samples.clear();
+    _resetEma();
+    result = null;
     await subscription?.cancel();
-    await sensor.dispose();
+    await sensor?.dispose();
     sensor = WifiSensorService(host: ip, port: 81);
     _listenToSensor();
     try {
-      await sensor.connect();
+      await sensor!.connect();
       if (mounted) {
         setState(() {
           activeConnection = ConnectionType.wifi;
@@ -267,14 +249,14 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
-        await sensor.disconnect();
-        setState(() => activeConnection = ConnectionType.simulator);
+        await sensor?.disconnect();
+        setState(() => activeConnection = ConnectionType.none);
       }
     }
   }
 
   Future<void> stopAndAnalyze() async {
-    await sensor.disconnect();
+    await sensor?.disconnect();
     final analysis = ai.analyze(samples);
     final newRecord = VibrationRecord(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -383,7 +365,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   String _getConnectionStatusText() {
     if (!isCapturing) {
-      return 'Listo para conectar por Wi-Fi, Bluetooth o Simulador';
+      return 'Listo para conectar al ESP32 por Wi-Fi o Bluetooth';
     }
     if (isPaused) {
       return '⏸️ PROCESO PAUSADO · Pantalla congelada (toca Reanudar)';
@@ -393,8 +375,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         return 'ESP32 conectado · Transmitiendo por Bluetooth BLE';
       case ConnectionType.wifi:
         return 'ESP32 conectado · Transmitiendo por Wi-Fi ($wifiIp:81)';
-      case ConnectionType.simulator:
-        return 'Modo Simulador de Pruebas · Capturando muestras';
+      case ConnectionType.none:
+        return 'Sin conexión activa';
     }
   }
 
@@ -454,15 +436,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         ),
         const SizedBox(height: 14),
 
-        // 2. SELECTOR DE MODO
-        _ModeSelector(
-          value: selectedMode,
-          enabled: !isCapturing,
-          onChanged: (mode) => setState(() => selectedMode = mode),
-        ),
-        const SizedBox(height: 14),
-
-        // 3. TARJETA PRINCIPAL DE LECTURAS Y OSCILOSCOPIO
+        // 2. TARJETA PRINCIPAL DE LECTURAS Y OSCILOSCOPIO
         _ReadingCard(
           value: displayMagnitude,
           sampleCount: samples.length,
@@ -479,7 +453,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         ),
         const SizedBox(height: 14),
 
-        // 4. BOTONES DE CONEXIÓN Y ACCIÓN
+        // 3. BOTONES DE CONEXIÓN Y ACCIÓN
         Row(
           children: [
             Expanded(
@@ -499,9 +473,9 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 10),
 
         if (isCapturing) ...[
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -544,21 +518,10 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
               ),
             ],
           ),
-        ] else ...[
-          FilledButton.icon(
-            onPressed: startDemo,
-            icon: const Icon(Icons.play_circle_outline),
-            label: const Text('Iniciar Simulador'),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.green,
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-            ),
-          ),
         ],
         const SizedBox(height: 16),
 
-        // 5. RESULTADOS DE IA O INSTRUCCIONES
+        // 4. RESULTADOS DE IA O INSTRUCCIONES
         if (result != null)
           _ResultCard(result: result!)
         else
@@ -604,9 +567,7 @@ class _SensorHealthBar extends StatelessWidget {
             icon: Icons.memory,
             title: 'ESP32',
             subtitle: isEspOnline
-                ? (activeConn == ConnectionType.wifi
-                    ? 'Wi-Fi 81'
-                    : (activeConn == ConnectionType.ble ? 'BLE' : 'Sim'))
+                ? (activeConn == ConnectionType.wifi ? 'Wi-Fi 81' : 'BLE')
                 : 'Offline',
             isOk: isEspOnline,
           ),
@@ -1089,36 +1050,6 @@ class _LiveWaveformPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LiveWaveformPainter oldDelegate) => true;
-}
-
-class _ModeSelector extends StatelessWidget {
-  const _ModeSelector(
-      {required this.value, required this.enabled, required this.onChanged});
-  final DemoMode value;
-  final bool enabled;
-  final ValueChanged<DemoMode> onChanged;
-  @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Tipo de ensayo para IA',
-            style: TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 9),
-        Row(children: [
-          Expanded(
-              child: ChoiceChip(
-                  label: const Text('Aislada (Golpe único)'),
-                  selected: value == DemoMode.isolated,
-                  onSelected:
-                      enabled ? (_) => onChanged(DemoMode.isolated) : null)),
-          const SizedBox(width: 10),
-          Expanded(
-              child: ChoiceChip(
-                  label: const Text('Sostenida (Maquinaria)'),
-                  selected: value == DemoMode.sustained,
-                  onSelected:
-                      enabled ? (_) => onChanged(DemoMode.sustained) : null))
-        ])
-      ]);
 }
 
 class _InstructionCard extends StatelessWidget {

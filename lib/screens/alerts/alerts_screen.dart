@@ -99,9 +99,9 @@ class _AlertCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 11),
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-          color: color.withOpacity(.06),
+          color: color.withValues(alpha: .06),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(.35))),
+          border: Border.all(color: color.withValues(alpha: .35))),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(icon, color: color, size: 26),
         const SizedBox(width: 12),
@@ -115,7 +115,7 @@ class _AlertCard extends StatelessWidget {
             Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                    color: color.withOpacity(.16),
+                    color: color.withValues(alpha: .16),
                     borderRadius: BorderRadius.circular(6)),
                 child: Text(tag, style: TextStyle(color: color, fontSize: 10)))
           ]),

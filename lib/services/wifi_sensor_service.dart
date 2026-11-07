@@ -104,9 +104,6 @@ class WifiSensorService implements SensorService {
   }
 
   @override
-  void setDemoMode(DemoMode mode) {}
-
-  @override
   Future<void> dispose() async {
     await disconnect();
     await _controller.close();

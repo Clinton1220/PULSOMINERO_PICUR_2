@@ -180,8 +180,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 code: codeController.text,
                 purpose: purpose,
               );
+              if (!dialogContext.mounted) return;
               if (!valid) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
                   const SnackBar(content: Text('Código incorrecto o vencido')),
                 );
                 return;

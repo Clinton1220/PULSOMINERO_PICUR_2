@@ -40,7 +40,7 @@ class AiService {
       riskLevel: risk,
       reasons: [
         ...result.reasons,
-        'RMS calculado: ${features.rms.toStringAsFixed(2)} mm/s.',
+        'RMS calculado: ${features.rms.toStringAsFixed(2)} m/s².',
         'Frecuencia estimada: ${features.dominantFrequency.toStringAsFixed(2)} Hz.',
         gasStatus,
       ],

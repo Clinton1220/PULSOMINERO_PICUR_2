@@ -65,9 +65,6 @@ class BleSensorService implements SensorService {
     _buffer = '';
   }
 
-  @override
-  void setDemoMode(DemoMode mode) {}
-
   void _consumeBytes(List<int> bytes) {
     _buffer += utf8.decode(bytes, allowMalformed: true);
     final lines = _buffer.split('\n');

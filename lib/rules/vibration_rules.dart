@@ -68,7 +68,7 @@ class VibrationRules {
       repetitions: repetitions,
       riskLevel: 'BAJO',
       reasons: [
-        'La amplitud está por debajo de 1.0 mm/s.',
+        'La amplitud está por debajo de 1.0 m/s².',
         'No se detectó un patrón repetitivo.'
       ],
     );
@@ -88,7 +88,7 @@ class VibrationRules {
   }
 
   List<String> _reasons(double maximum, Duration duration, int repetitions) => [
-        'Amplitud máxima: ${maximum.toStringAsFixed(2)} mm/s.',
+        'Amplitud máxima: ${maximum.toStringAsFixed(2)} m/s².',
         'Duración detectada: ${duration.inMilliseconds} ms.',
         'Picos repetitivos detectados: $repetitions.',
       ];
