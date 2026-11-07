@@ -7,6 +7,7 @@ import '../../models/analysis_result.dart';
 import '../../models/sensor_data.dart';
 import '../../models/vibration_record.dart';
 import '../../services/ai_service.dart';
+import '../../services/alert_sound_service.dart';
 import '../../services/ble_sensor_service.dart';
 import '../../services/sensor_service.dart';
 import '../../services/storage_service.dart';
@@ -25,6 +26,7 @@ enum ConnectionType { none, ble, wifi }
 
 class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   final ai = AiService();
+  final _alertSoundService = AlertSoundService();
   final samples = <SensorData>[];
   SensorService? sensor;
   StreamSubscription<SensorData>? subscription;
@@ -119,6 +121,18 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
           samples.add(reading);
           _updateEma(reading);
         });
+
+        final currentVib = isFilterEnabled && _emaMagnitude != null
+            ? _emaMagnitude!
+            : reading.dynamicVibration;
+        final currentGas = isFilterEnabled && _emaGas != null
+            ? _emaGas!
+            : reading.gasPpm;
+
+        _alertSoundService.checkAndAlert(
+          vibration: currentVib,
+          gasPpm: currentGas,
+        );
       }
     });
   }
@@ -127,6 +141,9 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     setState(() {
       isPaused = !isPaused;
     });
+    if (isPaused) {
+      _alertSoundService.stop();
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(isPaused
@@ -139,6 +156,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   @override
   void dispose() {
+    _alertSoundService.dispose();
     subscription?.cancel();
     sensor?.dispose();
     super.dispose();
@@ -146,6 +164,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   Future<void> connectEsp32Ble() async {
     if (isCapturing) return;
+    await _alertSoundService.stop();
     samples.clear();
     _resetEma();
     result = null;
@@ -229,6 +248,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   Future<void> connectEsp32Wifi(String ip) async {
     if (isCapturing) return;
+    await _alertSoundService.stop();
     samples.clear();
     _resetEma();
     result = null;
@@ -256,6 +276,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   }
 
   Future<void> stopAndAnalyze() async {
+    await _alertSoundService.stop();
     await sensor?.disconnect();
     final analysis = ai.analyze(samples);
     final newRecord = VibrationRecord(
