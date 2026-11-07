@@ -5,91 +5,67 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../models/analysis_result.dart';
 import '../../models/sensor_data.dart';
-import '../../models/vibration_record.dart';
 import '../../services/ai_service.dart';
-import '../../services/alert_sound_service.dart';
-import '../../services/ble_sensor_service.dart';
-import '../../services/sensor_service.dart';
+import '../../services/sensor_controller.dart';
 import '../../services/storage_service.dart';
-import '../../services/wifi_sensor_service.dart';
 
 class LiveMonitoringScreen extends StatefulWidget {
-  const LiveMonitoringScreen({super.key, required this.storage});
+  const LiveMonitoringScreen({
+    super.key,
+    required this.storage,
+    required this.sensorController,
+  });
 
   final StorageService storage;
+  final SensorController sensorController;
 
   @override
   State<LiveMonitoringScreen> createState() => _LiveMonitoringScreenState();
 }
 
-enum ConnectionType { none, ble, wifi }
-
 class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   final ai = AiService();
-  final _alertSoundService = AlertSoundService();
-  final samples = <SensorData>[];
-  SensorService? sensor;
-  StreamSubscription<SensorData>? subscription;
-  AnalysisResult? result;
-  bool isCapturing = false;
-  bool isPaused = false;
-  ConnectionType activeConnection = ConnectionType.none;
-  String wifiIp = '192.168.4.1';
 
-  // Filtro de Suavizado EMA (Anti-ruido y estabilidad de señal)
-  bool isFilterEnabled = true;
-  static const double _smoothAlpha = 0.28; // Factor de suavizado (reactivo y estable)
-  double? _emaMagnitude;
-  double? _emaX;
-  double? _emaY;
-  double? _emaZ;
-  double? _emaGas;
-  double? _emaPitch;
-  double? _emaRoll;
+  SensorController get controller => widget.sensorController;
 
-  void _resetEma() {
-    _emaMagnitude = null;
-    _emaX = null;
-    _emaY = null;
-    _emaZ = null;
-    _emaGas = null;
-    _emaPitch = null;
-    _emaRoll = null;
+  List<SensorData> get samples => controller.samples;
+  bool get isCapturing => controller.isCapturing;
+  bool get isPaused => controller.isPaused;
+  bool get isFilterEnabled => controller.isFilterEnabled;
+  ConnectionType get activeConnection => controller.activeConnection;
+  AnalysisResult? get result => controller.lastResult;
+  String get wifiIp => controller.wifiIp;
+  set wifiIp(String ip) => controller.wifiIp = ip;
+
+  double? get _emaMagnitude => controller.emaMagnitude;
+  double? get _emaGas => controller.emaGas;
+  double? get _emaPitch => controller.emaPitch;
+  double? get _emaRoll => controller.emaRoll;
+  double? get _emaX => controller.emaX;
+  double? get _emaY => controller.emaY;
+  double? get _emaZ => controller.emaZ;
+
+  @override
+  void initState() {
+    super.initState();
+    controller.addListener(_onSensorChanged);
   }
 
-  void _updateEma(SensorData reading) {
-    final currentMag = reading.dynamicVibration;
-    final adjX = reading.accelerationX;
-    final adjY = reading.accelerationY;
-    final adjZ = reading.accelerationZ;
+  void _onSensorChanged() {
+    if (mounted) setState(() {});
+  }
 
-    if (_emaMagnitude == null) {
-      _emaMagnitude = currentMag;
-      _emaX = adjX;
-      _emaY = adjY;
-      _emaZ = adjZ;
-      _emaGas = reading.gasPpm;
-      _emaPitch = reading.inclination;
-      _emaRoll = reading.roll;
-    } else {
-      _emaMagnitude = (_smoothAlpha * currentMag) + ((1.0 - _smoothAlpha) * _emaMagnitude!);
-      _emaX = (_smoothAlpha * adjX) + ((1.0 - _smoothAlpha) * _emaX!);
-      _emaY = (_smoothAlpha * adjY) + ((1.0 - _smoothAlpha) * _emaY!);
-      _emaZ = (_smoothAlpha * adjZ) + ((1.0 - _smoothAlpha) * _emaZ!);
-      _emaGas = (_smoothAlpha * reading.gasPpm) + ((1.0 - _smoothAlpha) * _emaGas!);
-      _emaPitch = (_smoothAlpha * reading.inclination) + ((1.0 - _smoothAlpha) * _emaPitch!);
-      _emaRoll = (_smoothAlpha * reading.roll) + ((1.0 - _smoothAlpha) * _emaRoll!);
-    }
+  @override
+  void dispose() {
+    controller.removeListener(_onSensorChanged);
+    super.dispose();
   }
 
   void toggleFilter() {
-    setState(() {
-      isFilterEnabled = !isFilterEnabled;
-      if (isFilterEnabled) _resetEma();
-    });
+    controller.toggleFilter();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(isFilterEnabled
+        content: Text(controller.isFilterEnabled
             ? '✨ Filtro EMA activado: Señal suavizada y anti-ruido'
             : '⚡ Filtro desactivado: Mostrando señal cruda instantánea'),
         duration: const Duration(seconds: 1),
@@ -98,55 +74,14 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   }
 
   List<double> _getDisplayWaveformSamples() {
-    if (samples.isEmpty) return [0.0];
-    final window = samples.sublist(samples.length > 35 ? samples.length - 35 : 0);
-    final rawList = window.map((s) => s.dynamicVibration).toList();
-
-    if (!isFilterEnabled || rawList.length < 3) return rawList;
-
-    // Suavizado EMA progresivo sobre la ventana reciente para curva continua
-    final smoothed = <double>[];
-    double current = rawList.first;
-    for (final val in rawList) {
-      current = (_smoothAlpha * val) + ((1.0 - _smoothAlpha) * current);
-      smoothed.add(current);
-    }
-    return smoothed;
-  }
-
-  void _listenToSensor() {
-    subscription = sensor?.readings.listen((reading) {
-      if (mounted && !isPaused) {
-        setState(() {
-          samples.add(reading);
-          _updateEma(reading);
-        });
-
-        final currentVib = isFilterEnabled && _emaMagnitude != null
-            ? _emaMagnitude!
-            : reading.dynamicVibration;
-        final currentGas = isFilterEnabled && _emaGas != null
-            ? _emaGas!
-            : reading.gasPpm;
-
-        _alertSoundService.checkAndAlert(
-          vibration: currentVib,
-          gasPpm: currentGas,
-        );
-      }
-    });
+    return controller.getDisplayWaveformSamples();
   }
 
   void togglePause() {
-    setState(() {
-      isPaused = !isPaused;
-    });
-    if (isPaused) {
-      _alertSoundService.stop();
-    }
+    controller.togglePause();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(isPaused
+        content: Text(controller.isPaused
             ? '⏸️ Proceso en pausa (datos congelados)'
             : '▶️ Proceso reanudado (monitoreo en vivo)'),
         duration: const Duration(seconds: 1),
@@ -154,45 +89,19 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    _alertSoundService.dispose();
-    subscription?.cancel();
-    sensor?.dispose();
-    super.dispose();
-  }
-
   Future<void> connectEsp32Ble() async {
-    if (isCapturing) return;
-    await _alertSoundService.stop();
-    samples.clear();
-    _resetEma();
-    result = null;
-    await subscription?.cancel();
-    await sensor?.dispose();
-    sensor = BleSensorService();
-    _listenToSensor();
     try {
-      await sensor!.connect();
-      if (mounted) {
-        setState(() {
-          activeConnection = ConnectionType.ble;
-          isCapturing = true;
-          isPaused = false;
-        });
-      }
+      await controller.connectBle();
     } on StateError catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
-        await sensor?.disconnect();
-        setState(() => activeConnection = ConnectionType.none);
       }
     }
   }
 
   Future<void> showWifiDialog() async {
-    final controller = TextEditingController(text: wifiIp);
+    final textController = TextEditingController(text: wifiIp);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -214,7 +123,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
             ),
             const SizedBox(height: 14),
             TextField(
-              controller: controller,
+              controller: textController,
               decoration: const InputDecoration(
                 labelText: 'Dirección IP del ESP32',
                 hintText: '192.168.4.1',
@@ -232,7 +141,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
           ),
           FilledButton(
             onPressed: () {
-              wifiIp = controller.text.trim();
+              wifiIp = textController.text.trim();
               Navigator.pop(ctx, true);
             },
             child: const Text('Conectar'),
@@ -247,51 +156,21 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   }
 
   Future<void> connectEsp32Wifi(String ip) async {
-    if (isCapturing) return;
-    await _alertSoundService.stop();
-    samples.clear();
-    _resetEma();
-    result = null;
-    await subscription?.cancel();
-    await sensor?.dispose();
-    sensor = WifiSensorService(host: ip, port: 81);
-    _listenToSensor();
     try {
-      await sensor!.connect();
-      if (mounted) {
-        setState(() {
-          activeConnection = ConnectionType.wifi;
-          isCapturing = true;
-          isPaused = false;
-        });
-      }
+      await controller.connectWifi(ip);
     } on StateError catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
-        await sensor?.disconnect();
-        setState(() => activeConnection = ConnectionType.none);
       }
     }
   }
 
   Future<void> stopAndAnalyze() async {
-    await _alertSoundService.stop();
-    await sensor?.disconnect();
-    final analysis = ai.analyze(samples);
-    final newRecord = VibrationRecord(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      startedAt: samples.isEmpty ? DateTime.now() : samples.first.timestamp,
-      samples: List.unmodifiable(samples),
-      analysis: analysis,
-    );
-    final isSynced = await widget.storage.saveRecord(newRecord);
+    await controller.stopAndAnalyze();
+    final isSynced = widget.storage.records.isNotEmpty &&
+        widget.storage.records.first.isSyncedToCloud;
     if (mounted) {
-      setState(() {
-        isCapturing = false;
-        isPaused = false;
-        result = analysis;
-      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppTheme.surface,
